@@ -6,7 +6,6 @@ from io import BytesIO
 
 # --- MİMARİ PLANLAMA VE TEFRİŞ MANTIĞI ---
 def plan_olustur(en, boy):
-    # Bir mimar gibi alanları % oranlarına göre bölüyoruz
     plan = {
         "Salon": {"box": [0, 0, en*0.6, boy*0.5], "renk": "#FFD580", "ikon": "🛋️"},
         "Mutfak": {"box": [en*0.6, 0, en*0.4, boy*0.4], "renk": "#FFF9C4", "ikon": "🍳"},
@@ -18,24 +17,21 @@ def plan_olustur(en, boy):
     return plan
 
 def dxf_disa_aktar(plan):
-    # En güvenli DXF oluşturma yöntemi
     doc = ezdxf.new('R2010')
     msp = doc.modelspace()
     for ad, veri in plan.items():
         x, y, w, h = veri["box"]
-        # Oda sınırlarını çiz
         msp.add_lwpolyline([(x, y), (x+w, y), (x+w, y+h), (x, y+h), (x, y)], close=True)
-        # Oda ismini AutoCAD içine ekle
-        msp.add_text(f"{ad}", dxfattribs={'height': 0.3}).set_placement((x+0.2, y+0.2))
+        msp.add_text(ad, dxfattribs={'height': 0.3}).set_placement((x+0.2, y+0.2))
     
-    out = BytesIO()
-    # HATA ÇÖZÜMÜ: save() fonksiyonu ile stream üzerine yazıyoruz
-    doc.write(out) 
-    return out.getvalue()
+    # KESİN ÇÖZÜM BURADA: BytesIO kullanarak doğrudan yazıyoruz
+    stream = BytesIO()
+    doc.write(stream)
+    return stream.getvalue()
 
 # --- STREAMLIT ARAYÜZÜ ---
-st.set_page_config(page_title="Pro-Mimar AI v3", layout="wide")
-st.title("🏗️ Profesyonel Mimari Planlama & Otomasyon")
+st.set_page_config(page_title="Mimar AI Pro v4", layout="wide")
+st.title("🏗️ Profesyonel Mimari Planlama & DXF Export")
 
 with st.sidebar:
     st.header("📐 Proje Parametreleri")
@@ -46,18 +42,21 @@ with st.sidebar:
 
 plan_verisi = plan_olustur(en, boy)
 
-col1, col2 = st.columns([2, 1]) # Plan alanı daha geniş olsun
+col1, col2 = st.columns([2, 1]) 
 
 with col1:
-    st.subheader("📍 2D Teknik Kat Planı")
+    st.subheader("📍 2D Teknik Kat Planı (Önizleme)")
     fig, ax = plt.subplots(figsize=(10, 8))
     for ad, veri in plan_verisi.items():
         x, y, w, h = veri["box"]
-        # Odaları çiz
+        # Odalar
         rect = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='#333333', facecolor=veri["renk"], alpha=0.6)
         ax.add_patch(rect)
-        # Metinleri ekle
+        # Metinler
         plt.text(x + w/2, y + h/2, f"{veri['ikon']} {ad}\n{w*h:.1f} m²", ha='center', va='center', weight='bold')
+        # Mimari Detay: Pencere Çizimi (Mavi çizgiler)
+        if y + h >= boy or x + w >= en:
+            ax.plot([x+w*0.2, x+w*0.8], [y+h, y+h], color='blue', lw=4) # Üst pencere
 
     plt.xlim(-1, en+1)
     plt.ylim(-1, boy+1)
@@ -80,13 +79,8 @@ with col2:
             file_name="mimari_proje.dxf",
             mime="application/dxf"
         )
+        st.success("AutoCAD dosyası hazır!")
     except Exception as e:
         st.error(f"DXF Hatası: {e}")
 
-    st.success("Plan mimari standartlara göre optimize edildi.")
-    
-    # Oda Listesi Tablosu
-    st.write("**Oda Detayları:**")
-    for ad, veri in plan_verisi.items():
-        w, h = veri["box"][2], veri["box"][3]
-        st.write(f"- {ad}: {w*h:.1f} m²")
+    st.info("💡 İpucu: İndirdiğiniz DXF dosyasını AutoCAD, Revit veya SketchUp içine sürükleyip teknik çizime başlayabilirsiniz.")
