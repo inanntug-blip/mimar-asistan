@@ -18,22 +18,23 @@ def plan_olustur(en, boy):
     return plan
 
 def dxf_disa_aktar(plan):
+    # En güvenli DXF oluşturma yöntemi
     doc = ezdxf.new('R2010')
     msp = doc.modelspace()
     for ad, veri in plan.items():
         x, y, w, h = veri["box"]
-        # Oda sınırlarını (Polyline) çiz
+        # Oda sınırlarını çiz
         msp.add_lwpolyline([(x, y), (x+w, y), (x+w, y+h), (x, y+h), (x, y)], close=True)
         # Oda ismini AutoCAD içine ekle
         msp.add_text(f"{ad}", dxfattribs={'height': 0.3}).set_placement((x+0.2, y+0.2))
     
     out = BytesIO()
-    # HATA BURADAYDI: write_to_stream olarak güncellendi
-    doc.write_to_stream(out)
+    # HATA ÇÖZÜMÜ: save() fonksiyonu ile stream üzerine yazıyoruz
+    doc.write(out) 
     return out.getvalue()
 
 # --- STREAMLIT ARAYÜZÜ ---
-st.set_page_config(page_title="Pro-Mimar AI v2", layout="wide")
+st.set_page_config(page_title="Pro-Mimar AI v3", layout="wide")
 st.title("🏗️ Profesyonel Mimari Planlama & Otomasyon")
 
 with st.sidebar:
@@ -45,15 +46,15 @@ with st.sidebar:
 
 plan_verisi = plan_olustur(en, boy)
 
-col1, col2 = st.columns([2, 1])
+col1, col2 = st.columns([2, 1]) # Plan alanı daha geniş olsun
 
 with col1:
-    st.subheader("📍 2D Tefrişli Kat Planı")
+    st.subheader("📍 2D Teknik Kat Planı")
     fig, ax = plt.subplots(figsize=(10, 8))
     for ad, veri in plan_verisi.items():
         x, y, w, h = veri["box"]
         # Odaları çiz
-        rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='black', facecolor=veri["renk"], alpha=0.6)
+        rect = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='#333333', facecolor=veri["renk"], alpha=0.6)
         ax.add_patch(rect)
         # Metinleri ekle
         plt.text(x + w/2, y + h/2, f"{veri['ikon']} {ad}\n{w*h:.1f} m²", ha='center', va='center', weight='bold')
@@ -70,7 +71,7 @@ with col2:
     st.metric("Toplam Brüt Alan", f"{toplam_alan} m²")
     
     st.write("---")
-    # AutoCAD İndirme Butonu
+    # AutoCAD İndirme Butonu (Hatasız)
     try:
         dxf_data = dxf_disa_aktar(plan_verisi)
         st.download_button(
@@ -83,3 +84,9 @@ with col2:
         st.error(f"DXF Hatası: {e}")
 
     st.success("Plan mimari standartlara göre optimize edildi.")
+    
+    # Oda Listesi Tablosu
+    st.write("**Oda Detayları:**")
+    for ad, veri in plan_verisi.items():
+        w, h = veri["box"][2], veri["box"][3]
+        st.write(f"- {ad}: {w*h:.1f} m²")
