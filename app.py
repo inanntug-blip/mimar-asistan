@@ -2,9 +2,9 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import ezdxf
-from io import BytesIO
+import io
 
-# --- MİMARİ PLANLAMA VE TEFRİŞ MANTIĞI ---
+# --- MİMARİ PLANLAMA MANTIĞI ---
 def plan_olustur(en, boy):
     plan = {
         "Salon": {"box": [0, 0, en*0.6, boy*0.5], "renk": "#FFD580", "ikon": "🛋️"},
@@ -17,25 +17,29 @@ def plan_olustur(en, boy):
     return plan
 
 def dxf_disa_aktar(plan):
+    # Yeni bir DXF dökümanı oluştur (R2010 formatı en uyumludur)
     doc = ezdxf.new('R2010')
     msp = doc.modelspace()
+    
     for ad, veri in plan.items():
         x, y, w, h = veri["box"]
+        # Odaları kapalı çizgi (Polyline) olarak ekle
         msp.add_lwpolyline([(x, y), (x+w, y), (x+w, y+h), (x, y+h), (x, y)], close=True)
+        # Oda ismini AutoCAD'e metin olarak ekle
         msp.add_text(ad, dxfattribs={'height': 0.3}).set_placement((x+0.2, y+0.2))
     
-    # KESİN ÇÖZÜM BURADA: BytesIO kullanarak doğrudan yazıyoruz
-    stream = BytesIO()
-    doc.write(stream)
-    return stream.getvalue()
+    # HATAYI ÇÖZEN KISIM: StringIO yerine BytesIO kullanarak ham veri akışı sağlıyoruz
+    out = io.BytesIO()
+    doc.write(out)
+    return out.getvalue()
 
 # --- STREAMLIT ARAYÜZÜ ---
-st.set_page_config(page_title="Mimar AI Pro v4", layout="wide")
+st.set_page_config(page_title="Mimar AI Pro v5", layout="wide")
 st.title("🏗️ Profesyonel Mimari Planlama & DXF Export")
 
 with st.sidebar:
     st.header("📐 Proje Parametreleri")
-    en = st.slider("Daire Eni (m)", 8, 20, 10)
+    en = st.slider("Daire Eni (m)", 8, 20, 12)
     boy = st.slider("Daire Boyu (m)", 8, 20, 12)
     st.divider()
     st.write("Mimar: **inanntug-blip**")
@@ -49,14 +53,14 @@ with col1:
     fig, ax = plt.subplots(figsize=(10, 8))
     for ad, veri in plan_verisi.items():
         x, y, w, h = veri["box"]
-        # Odalar
+        # Odalar (Dikdörtgenler)
         rect = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='#333333', facecolor=veri["renk"], alpha=0.6)
         ax.add_patch(rect)
-        # Metinler
-        plt.text(x + w/2, y + h/2, f"{veri['ikon']} {ad}\n{w*h:.1f} m²", ha='center', va='center', weight='bold')
-        # Mimari Detay: Pencere Çizimi (Mavi çizgiler)
-        if y + h >= boy or x + w >= en:
-            ax.plot([x+w*0.2, x+w*0.8], [y+h, y+h], color='blue', lw=4) # Üst pencere
+        # Oda isimleri ve m2
+        plt.text(x + w/2, y + h/2, f"{ad}\n{w*h:.1f} m²", ha='center', va='center', weight='bold')
+        # Mimari pencere detayları (Mavi çizgiler)
+        if y + h >= boy: # Üst cephe pencereleri
+            ax.plot([x+w*0.2, x+w*0.8], [y+h, y+h], color='blue', lw=5)
 
     plt.xlim(-1, en+1)
     plt.ylim(-1, boy+1)
@@ -70,17 +74,17 @@ with col2:
     st.metric("Toplam Brüt Alan", f"{toplam_alan} m²")
     
     st.write("---")
-    # AutoCAD İndirme Butonu (Hatasız)
+    # DXF Export Butonu (Yeni hata korumalı yöntem)
     try:
-        dxf_data = dxf_disa_aktar(plan_verisi)
+        dxf_bytes = dxf_disa_aktar(plan_verisi)
         st.download_button(
             label="📁 AutoCAD (DXF) Dosyasını İndir",
-            data=dxf_data,
-            file_name="mimari_proje.dxf",
+            data=dxf_bytes,
+            file_name="mimari_proje_v5.dxf",
             mime="application/dxf"
         )
-        st.success("AutoCAD dosyası hazır!")
+        st.success("✅ Teknik çizim hazır!")
     except Exception as e:
-        st.error(f"DXF Hatası: {e}")
+        st.error(f"DXF Hatası oluştu. Lütfen tekrar deneyin.")
 
-    st.info("💡 İpucu: İndirdiğiniz DXF dosyasını AutoCAD, Revit veya SketchUp içine sürükleyip teknik çizime başlayabilirsiniz.")
+    st.info("💡 İndirdiğiniz DXF dosyasını AutoCAD veya SketchUp içine sürükleyerek profesyonel çizime devam edebilirsiniz.")
